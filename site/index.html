@@ -1,0 +1,532 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>NZ Recipe Check</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap">
+<style>
+/* Layout: chat column (left) feeding a full NZ rulebook (right); each rule lights up with the recipes that trigger it */
+:root{
+  --bg:#F3F5F2; --surface:#FFFFFF; --surface-2:#EEF1EC; --fg:#17201B; --body:#38423C; --muted:#64706A; --line:#D5DCD6;
+  --accent:#1E6B4F; --accent-soft:#DCEFE6; --user:#E3EFE8;
+  --c1:#1E7A4C; --c1-soft:#DDF2E5; --c2:#8A6A00; --c2-soft:#FBF0CC; --c3:#B4510F; --c3-soft:#FCE4D2; --c4:#B42335; --c4-soft:#F9DCE0;
+  --f-ui:"Instrument Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#111613; --surface:#1A211D; --surface-2:#212A25; --fg:#E8EEEA; --body:#C8D1CB; --muted:#97A39C; --line:#2E3832;
+  --accent:#5CC79A; --accent-soft:#1D3A2E; --user:#1F3329;
+  --c1:#62D394; --c1-soft:#183625; --c2:#E9C24E; --c2-soft:#3A3115; --c3:#F49A5C; --c3-soft:#3D2616; --c4:#F2788A; --c4-soft:#3E1D23;
+  color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#111613; --surface:#1A211D; --surface-2:#212A25; --fg:#E8EEEA; --body:#C8D1CB; --muted:#97A39C; --line:#2E3832;
+  --accent:#5CC79A; --accent-soft:#1D3A2E; --user:#1F3329;
+  --c1:#62D394; --c1-soft:#183625; --c2:#E9C24E; --c2-soft:#3A3115; --c3:#F49A5C; --c3-soft:#3D2616; --c4:#F2788A; --c4-soft:#3E1D23;
+  color-scheme:dark}
+
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--f-ui);font-size:15px;line-height:1.5;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:18px 18px}
+button,input,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+h1,h2,h3{margin:0;text-wrap:balance}
+p{margin:0}
+.app{max-width:1360px;margin:0 auto;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.05fr);gap:18px;height:calc(100% - 0px)}
+@media (max-width:980px){.app{grid-template-columns:1fr;height:auto}}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:14px;display:flex;flex-direction:column;min-width:0;min-height:0}
+@media (min-width:981px){.panel{height:calc(100vh - 36px)}}
+.phead{padding:14px 18px;border-bottom:1px solid var(--line);display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.phead .t{flex:1 1 200px;min-width:0}
+.eyebrow{font-size:11.5px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--accent)}
+h1{font-size:21px;letter-spacing:-.01em}
+h2{font-size:18px}
+.hint{font-size:13px;color:var(--muted)}
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:8px;padding:6px 12px;font-weight:600;font-size:13.5px}
+.btn:hover{background:var(--surface-2)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--surface)}
+.btn:disabled{opacity:.5;cursor:default}
+
+/* chat */
+.thread{flex:1;overflow-y:auto;padding:18px;display:flex;flex-direction:column;gap:14px;min-height:260px}
+@media (max-width:980px){.thread{max-height:none;overflow:visible}}
+.msg{max-width:100%;display:flex;flex-direction:column;gap:4px}
+.msg .who{font-size:11.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.msg.user{align-self:flex-end;max-width:88%}
+.msg.user .bubble{background:var(--user);border-radius:14px 14px 4px 14px;padding:10px 14px;white-space:pre-wrap;overflow-wrap:anywhere}
+.msg.user .who{text-align:right}
+.msg.bot .bubble{background:var(--surface-2);border-radius:14px 14px 14px 4px;padding:12px 14px;display:grid;gap:12px;overflow-wrap:anywhere}
+.thinking{color:var(--muted);font-style:italic}
+.prod{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px;display:grid;gap:8px}
+.prod-h{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.prod-h h3{font-size:15.5px;flex:1 1 160px}
+.pill{display:inline-flex;align-items:center;gap:5px;border-radius:20px;padding:2px 9px;font-size:12px;font-weight:700;white-space:nowrap}
+.k1{background:var(--c1-soft);color:var(--c1)} .k2{background:var(--c2-soft);color:var(--c2)} .k3{background:var(--c3-soft);color:var(--c3)} .k4{background:var(--c4-soft);color:var(--c4)}
+.permit{border:1px solid var(--line);color:var(--body)}
+.permit.yes{border-color:transparent;background:var(--c4-soft);color:var(--c4)}
+.permit.unclear{border-color:transparent;background:var(--c3-soft);color:var(--c3)}
+.prod .comp{font-size:13px;color:var(--muted)}
+.prod ul{margin:0;padding-left:18px;display:grid;gap:4px;font-size:14px;color:var(--body)}
+.lbl{font-size:11.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.ok{color:var(--c1);font-weight:600} .bad{color:var(--c4);font-weight:600} .miss{color:var(--c3);font-weight:600}
+.chips{display:flex;gap:5px;flex-wrap:wrap}
+.chip{border:1px solid var(--line);background:var(--surface);border-radius:6px;padding:1px 7px;font-size:12px;font-family:var(--f-mono);color:var(--body)}
+.chip:hover{border-color:var(--accent);color:var(--accent)}
+.questions{border-left:3px solid var(--c3);padding:6px 10px;background:var(--surface);border-radius:0 8px 8px 0}
+.composer{border-top:1px solid var(--line);padding:12px 14px;display:grid;gap:8px}
+.cbox{display:flex;gap:8px;align-items:flex-end;border:1px solid var(--line);border-radius:12px;background:var(--surface-2);padding:8px}
+.cbox:focus-within{border-color:var(--accent)}
+.cbox textarea{flex:1;border:none;background:transparent;resize:none;min-height:44px;max-height:260px;outline:none;line-height:1.45;padding:4px 6px}
+.examples{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.mode{font-size:12px;color:var(--muted)}
+
+/* rulebook */
+.rb-tools{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{border:none;background:var(--surface);padding:6px 11px;font-size:13px;font-weight:600}
+.seg button[aria-pressed="true"]{background:var(--accent-soft);color:var(--accent)}
+.rb-sum{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;padding:12px 18px 0}
+.tile{border-radius:10px;padding:8px 10px;display:grid;gap:1px}
+.tile b{font-size:22px;font-variant-numeric:tabular-nums;line-height:1.1}
+.tile span{font-size:12px;font-weight:600}
+.rb{flex:1;overflow-y:auto;padding:12px 18px 18px;display:grid;gap:18px;align-content:start}
+@media (max-width:980px){.rb{overflow:visible}}
+.grp{display:grid;gap:8px}
+.grp h3{font-size:13px;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);display:flex;gap:8px;align-items:baseline}
+.grp h3 span{font-family:var(--f-mono);font-size:11.5px;letter-spacing:0;text-transform:none}
+.rule{border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:grid;gap:6px;background:var(--surface);transition:box-shadow .2s}
+.rule.on{border-color:var(--accent);background:linear-gradient(var(--accent-soft),var(--accent-soft)) left/4px 100% no-repeat,var(--surface)}
+.rule.all{border-left:4px solid var(--muted)}
+.rule.off{opacity:.62}
+.rule.flash{box-shadow:0 0 0 3px var(--accent)}
+.rule-h{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap}
+.rule-h .id{font-family:var(--f-mono);font-size:12px;color:var(--muted)}
+.rule-h .name{font-weight:700;flex:1 1 200px}
+.rule-h .law{font-size:12px;color:var(--muted)}
+.rule p{font-size:14px;color:var(--body)}
+.applies{display:grid;gap:3px;font-size:13.5px}
+.applies .who{font-weight:700;color:var(--accent)}
+.applies .na{color:var(--muted);font-style:italic}
+.rule a{color:var(--accent)}
+.empty{color:var(--muted);font-style:italic;font-size:14px}
+footer.note{font-size:12px;color:var(--muted);padding:0 18px 14px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+
+<div class="app">
+  <section class="panel" aria-labelledby="h-chat">
+    <div class="phead">
+      <div class="t">
+        <div class="eyebrow">Lyofood · New Zealand</div>
+        <h1 id="h-chat">NZ Recipe Check</h1>
+      </div>
+      <button class="btn" id="reset" title="Start a new conversation">New check</button>
+    </div>
+    <div class="thread" id="thread" aria-live="polite"></div>
+    <div class="composer">
+      <div class="examples"><span class="hint">Try:</span>
+        <button class="btn" data-ex="a">Example recipes</button>
+        <button class="btn" data-ex="b">Add cooking temperatures</button>
+      </div>
+      <label class="cbox" for="box">
+        <textarea id="box" rows="2" placeholder="Paste your recipe list – ingredients with %, and at how many degrees and for how long each part is cooked…"></textarea>
+        <button class="btn primary" id="send">Check</button>
+      </label>
+      <div class="mode" id="mode">Enter sends · Shift+Enter for a new line</div>
+    </div>
+  </section>
+
+  <section class="panel" aria-labelledby="h-rb">
+    <div class="phead">
+      <div class="t">
+        <h2 id="h-rb">NZ rulebook</h2>
+        <p class="hint" id="rbHint">Every requirement for selling Lyofood products in New Zealand. Rules your recipes trigger are highlighted.</p>
+      </div>
+      <div class="rb-tools">
+        <div class="seg" role="group" aria-label="Filter rules">
+          <button aria-pressed="true" data-f="all">All rules</button>
+          <button aria-pressed="false" data-f="rel">Only relevant</button>
+        </div>
+      </div>
+    </div>
+    <div class="rb-sum" id="tiles"></div>
+    <div class="rb" id="rb"></div>
+    <footer class="note">Research for a university project, not legal advice. Based on MPI's import health standards and the FSANZ Food Standards Code, checked 2 Nov 2026. Confirm with MPI Animal Imports (animal.imports@mpi.govt.nz) before the first shipment.</footer>
+  </section>
+</div>
+
+<script>
+/* ======================= constants ======================= */
+const STORE="lyofood-nz-recipe-check-v1";
+const CAT={1:{n:"Easy",k:"k1"},2:{n:"Some restrictions",k:"k2"},3:{n:"A lot of restrictions",k:"k3"},4:{n:"Not importable as-is",k:"k4"}};
+const RUMINANT=["beef","lamb","goat","venison","mutton","veal"];
+const POULTRY=["chicken","turkey","duck","poultry"];
+const NZ_ALLERGENS=["wheat","barley","rye","oats","gluten","milk","egg","fish","crustacea","mollusc","peanut","soy","sesame","almond","brazil nut","cashew","hazelnut","macadamia","pecan","pine nut","pistachio","walnut","lupin","sulphites"];
+const PORK_TABLE=[[56,60],[57,55],[58,50],[59,45],[60,40],[61,35],[62,30],[63,25],[64,22],[65,20],[66,17],[67,15],[68,13],[69,12],[70,11]];
+const SRC={
+  ihs:["IHS Specified Animal Products (SPECPROD.ALL, 2022)","https://www.mpi.govt.nz/dmsdocument/41067-Specified-Animal-Products-Import-Health-Standard"],
+  pork:["IHS Pig meat from the EU (MEAPORIC.EU)","https://www.mpi.govt.nz/dmsdocument/1916/direct"],
+  dairy:["IHS Specified Foods Containing Animal Products – dairy (EDIPROIC.ALL, 2020)","https://www.mpi.govt.nz/dmsdocument/1751-Specified-Foods-for-human-consumption-Containing-Animal-Products-2020-Import-Health-Standard"],
+  egg:["IHS Egg Products (2023)","https://www.mpi.govt.nz/dmsdocument/56659-Egg-Products-Import-Health-Standard-2023"],
+  rum:["IHS Ruminant Meat and Ruminant Meat Products (2022)","https://d2gt7qz2p7h7rk.cloudfront.net/aqs/hou/pdf/50446-IHS-RUMNPROD.GEN.pdf"],
+  hem:["IHS Heat-and-eat meals Canada/USA","https://www.mpi.govt.nz/dmsdocument/1818/direct"],
+  poultry:["MPI poultry requirement documents","https://www.mpi.govt.nz/import/importing-food-and-beverages/poultry/requirements"],
+  proc:["MPI – Processed foods from animals","https://www.mpi.govt.nz/import/importing-food-and-beverages/processed-food/processed-foods-from-animals"],
+  reg:["MPI – Registering as a food importer","https://www.mpi.govt.nz/import/importing-food-and-beverages/registering-as-a-food-importer"],
+  notice:["Food Notice: Registered Food Importers (2026)","https://www.mpi.govt.nz/dmsdocument/71821/direct"],
+  beef:["MPI – Bovine meat is a high regulatory interest food","https://www.mpi.govt.nz/import/food/imported-foods-that-require-food-safety-clearance/importing-bovine-meat-and-bovine-meat-products-foods-of-high-regulatory-interest"],
+  s122:["FSANZ Std 1.2.2 – supplier name & address","https://legislation.gov.au/F2015L00389/asmade/2015-03-31/text/original/pdf"],
+  s125:["FSANZ Std 1.2.5 – date marking","https://www.legislation.gov.au/F2015L00401/2021-06-03/2021-06-03/text/original/pdf"],
+  peal:["Plain English Allergen Labelling","https://www.safefood.qld.gov.au/newsroom/understanding-plain-english-allergen-labelling-peal-for-packaged-food/"],
+  cool:["Commerce Commission – country of origin","https://www.comcom.govt.nz/consumers/product-safety-and-consumer-information-standards/country-of-origin-food-labelling-guidance"],
+  fta:["NZ Customs – NZ–EU FTA","https://customs.govt.nz/business/tariffs/free-trade-agreements/new-zealand-european-union-free-trade-agreement"],
+  draft:["Draft IHS SPECHUMN.ALL (2026)","https://www.mpi.govt.nz/consultations/draft-import-health-standard-for-specified-animal-products-for-human-use"],
+  travel:["MPI – Bringing food to NZ","https://www.mpi.govt.nz/bring-send-to-nz/bringing-and-posting-items-to-nz/check-if-you-can-bring-or-send-an-item-to-nz/bringing-food-to-nz"],
+};
+
+const EXAMPLES={
+a:`Pork Stew: pork 40%, pearl barley 26%, green peas 5%, carrot 5%, wheat flour, spices with celery
+Five-Spice Chicken: chicken breast 36%, rice 32%, vegetables 25%, soy sauce
+Mac & Cheese: pasta 54%, milk 27%, cheddar 8%, pecorino 3.5%, gruyère 1.5%, butter
+Mexican Scrambled Eggs (breakfast): vegetables 53%, egg 39%, sheep's cheese 3.5%, coriander`,
+b:`Example temperatures: the pork is simmered at 95 °C core for 45 minutes before freeze-drying. The chicken is cooked to 75 °C for 5 minutes. The scrambled eggs reach 72 °C for 3 minutes.`
+};
+
+/* ======================= helpers ======================= */
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const num=v=>(v===null||v===undefined||v===""||isNaN(+v))?null:+v;
+const fmt=v=>v===null?"?":(+v).toLocaleString("en",{maximumFractionDigits:1})+"%";
+const link=k=>`<a href="${SRC[k][1]}" target="_blank" rel="noopener">${esc(SRC[k][0])}</a>`;
+
+/* ======================= state ======================= */
+let state={userTexts:[],thread:[],products:[],unclear:[]};
+try{ const s=JSON.parse(localStorage.getItem(STORE)); if(s&&Array.isArray(s.userTexts)) state=s; }catch(e){}
+const save=()=>{ try{ localStorage.setItem(STORE,JSON.stringify(state)) }catch(e){} };
+
+/* ======================= analysis of one product ======================= */
+function shares(p){
+  const sum=(test)=>{ let t=0,unk=false,any=false;
+    (p.ingredients||[]).forEach(i=>{ if(test(i)){ any=true; const v=num(i.percent); if(v===null) unk=true; else t+=v; } });
+    return {v:any?t:0,unk,any}; };
+  const a=i=>String(i.animal||"none").toLowerCase();
+  const isMeat=i=>a(i)==="pork"||RUMINANT.includes(a(i))||POULTRY.includes(a(i))||a(i)==="other_meat";
+  return {
+    pork:sum(i=>a(i)==="pork"),
+    rum:sum(i=>RUMINANT.includes(a(i))),
+    poultry:sum(i=>POULTRY.includes(a(i))),
+    otherMeat:sum(i=>a(i)==="other_meat"),
+    dairy:sum(i=>a(i)==="dairy"),
+    egg:sum(i=>a(i)==="egg"),
+    fish:sum(i=>a(i)==="fish"||a(i)==="seafood"),
+    honey:sum(i=>a(i)==="honey"),
+    gelatine:sum(i=>a(i)==="gelatine"),
+    stockOnly:(p.ingredients||[]).filter(isMeat).length>0 && (p.ingredients||[]).filter(isMeat).every(i=>i.form==="stock_extract_fat"),
+    cheese:(p.ingredients||[]).some(i=>a(i)==="dairy"&&/chees|cheddar|gorgonzola|pecorino|gruy|parmesan|feta|mozzarella|brie/i.test(i.name||"")),
+  };
+}
+function cookFor(p,targets){
+  const c=(p.cooking||[]).filter(x=>{ const t=String(x.target||"whole").toLowerCase(); return t==="whole"||targets.some(g=>t.includes(g)); });
+  // pick the strongest step: highest temp with minutes known
+  let best=null; c.forEach(x=>{ const T=num(x.temp_c), m=num(x.minutes); if(T===null) return; if(!best||T>best.T||(T===best.T&&(m||0)>(best.m||0))) best={T,m}; });
+  return best;
+}
+const fmtCook=c=>c?`${c.T} °C${c.m!==null&&c.m!==undefined?` for ${c.m} min`:" (time not given)"}`:"not given";
+function porkCheck(c){
+  if(!c) return {st:"miss",txt:"Cooking temperature/time of the pork not given – needed for the EU pork rule (e.g. 70 °C core for 11 min)."};
+  if(c.T<56) return {st:"bad",txt:`Pork cooked at ${fmtCook(c)} – below the lowest accepted temperature (56 °C for 60 min).`};
+  if(c.m===null||c.m===undefined) return {st:"miss",txt:`Pork reaches ${c.T} °C, but for how long? Needed: e.g. ${c.T>=70?"11":PORK_TABLE.find(r=>r[0]===Math.min(70,Math.floor(c.T)))[1]} min at that core temperature.`};
+  const row=PORK_TABLE.slice().reverse().find(r=>c.T>=r[0]);
+  return c.m>=row[1]
+    ? {st:"ok",txt:`Pork cooked at ${fmtCook(c)} meets the EU pork standard (${row[0]} °C needs ≥ ${row[1]} min).`}
+    : {st:"bad",txt:`Pork cooked at ${fmtCook(c)} – too short: at ${row[0]} °C the standard needs ≥ ${row[1]} min.`};
+}
+function eggCheck(c){
+  if(!c) return {st:"miss",txt:"Egg heating not given – needed: at least 60 °C/3.5 min, 64 °C/2.7 min or 70 °C/2 min."};
+  if(c.m===null||c.m===undefined) return {st:"miss",txt:`Egg reaches ${c.T} °C, but for how long? (70 °C needs ≥ 2 min.)`};
+  const need=c.T>=70?2:c.T>=64?2.7:c.T>=60?3.5:null;
+  if(need===null) return {st:"bad",txt:`Egg heated to ${fmtCook(c)} – below 60 °C, not enough for the egg standard.`};
+  return c.m>=need?{st:"ok",txt:`Egg heated to ${fmtCook(c)} meets the egg standard (≥ ${need} min at that temperature).`}
+                   :{st:"bad",txt:`Egg heated to ${fmtCook(c)} – needs ≥ ${need} min at that temperature.`};
+}
+function benchCheck(c,what){
+  if(!c) return {st:"miss",txt:`Cooking of the ${what} not given – for an equivalence request MPI will want core temperature and time.`};
+  if(c.m===null||c.m===undefined) return {st:"miss",txt:`${what[0].toUpperCase()+what.slice(1)} reaches ${c.T} °C – add the time to compare with MPI's benchmark (70 °C/25 min or 80 °C/3 min).`};
+  const ok=(c.T>=80&&c.m>=3)||(c.T>=70&&c.m>=25);
+  return ok?{st:"ok",txt:`${what[0].toUpperCase()+what.slice(1)} cooked at ${fmtCook(c)} meets the benchmark MPI accepts for US freeze-dried meals (70 °C/25 min or 80 °C/3 min) – a strong argument for an equivalence request.`}
+           :{st:"bad",txt:`${what[0].toUpperCase()+what.slice(1)} cooked at ${fmtCook(c)} is below the benchmark MPI accepts for US meals (70 °C/25 min or 80 °C/3 min).`};
+}
+
+function assess(p){
+  const s=shares(p); const R=[]; const checks=[]; const qs=[];
+  let cat=1, permit="No"; const up=c=>{ if(c>cat) cat=c };
+  const why=[];
+  const meat=s.pork.v+s.rum.v+s.poultry.v+s.otherMeat.v;
+  const meatAny=s.pork.any||s.rum.any||s.poultry.any||s.otherMeat.any;
+  const meatUnk=s.pork.unk||s.rum.unk||s.poultry.unk||s.otherMeat.unk;
+  const otherAnimal=meatAny||s.fish.any||s.honey.any;
+  ["IMP","LBL","ADR","PEAL","NIP","PCT","DATE","CLAIM","FTA","GST","BROKER","CONS"].forEach(r=>R.push(r));
+
+  if(p.type==="accessory"){
+    why.push("Not a food – no food or biosecurity import rules.");
+    return {cat:1,permit:"No",why,R:["BROKER"],checks,qs,s};
+  }
+  const animalAny=meatAny||s.dairy.any||s.egg.any||s.fish.any||s.honey.any||s.gelatine.any;
+  if(animalAny){ R.push("IHS"); }
+
+  /* meat */
+  if(meatAny){
+    if(meatUnk && meat<=5) qs.push(`${p.name}: what % of the product is meat? Needed to decide between the 5% rule and the meat rules.`);
+    if(s.stockOnly){ up(2); R.push("STOCK"); why.push("Meat only as stock/extract/fat without pieces."); }
+    else if(meatUnk && meat<=5){ /* wait for the % */ }
+    else if(meat<=5){ up(2); R.push("MEAT5"); why.push(`Total meat ${fmt(meat)} – 5% or less.`); }
+    else {
+      if(s.poultry.any){ up(4); permit="Yes"; R.push("POULTRY","EQUIV"); why.push(`Contains poultry (${fmt(s.poultry.unk?null:s.poultry.v)}) with more than 5% meat – no EU route.`);
+        checks.push(benchCheck(cookFor(p,["chicken","poultry","turkey","duck","meat"]),"poultry")); }
+      if(s.rum.any){ up(4); permit="Yes"; R.push("RUM","HRI","EQUIV"); why.push(`Contains beef/lamb (${fmt(s.rum.unk?null:s.rum.v)}) with more than 5% meat – needs an agreed vet certificate or equivalence.`);
+        checks.push(benchCheck(cookFor(p,["beef","lamb","meat","venison","goat"]),"beef/lamb")); }
+      if(s.pork.any && !s.poultry.any && !s.rum.any && !s.otherMeat.any){ up(3); R.push("PORK","ORIGIN","ASF");
+        why.push(`Pork ${fmt(s.pork.unk?null:s.pork.v)} – EU cooked-pork route.`);
+        const ck=porkCheck(cookFor(p,["pork","meat"])); checks.push(ck); if(ck.st==="bad") up(4); }
+      if(s.otherMeat.any){ up(4); permit="Yes"; R.push("EQUIV"); why.push("Contains another meat – no route identified."); }
+      if(s.pork.any && (s.poultry.any||s.rum.any)) R.push("REFORM");
+    }
+  }
+  if(!s.rum.any && /goulash|bolognese|stroganoff|burger|beef|chili con/i.test(p.name||"")) R.push("NONBEEF");
+
+  /* dairy & egg */
+  if(p.type==="dessert" && (s.dairy.any||s.egg.any)){ up(2); R.push("DESSERT"); why.push("Dessert/cake/pudding with dairy or egg."); }
+  else {
+    if(s.dairy.any){
+      if(s.dairy.unk && s.dairy.v<=5) qs.push(`${p.name}: what % of the product is dairy (milk, cream, butter, cheese… together)?`);
+      else if(s.dairy.v<=5){ up(2); R.push("DE5"); why.push(`Dairy ${fmt(s.dairy.v)} – 5% or less.`); }
+      else if(p.type==="bar"){ up(2); R.push("BAR"); why.push("Protein/energy bar with dairy."); }
+      else if(!otherAnimal && !(num(s.egg.v)>5)){ up(2); R.push("DAIRY"); why.push(`Dairy ${fmt(s.dairy.v)}${s.dairy.unk?" (plus ingredients without %)":""} is the only animal ingredient – MPI's dairy standard (to confirm).`); }
+      else { up(3); if(permit==="No") permit="Unclear"; R.push("MIXED"); why.push(`Dairy ${fmt(s.dairy.v)} mixed with other animal ingredients.`); }
+      if(s.cheese) R.push("CHEESE");
+    }
+    if(s.egg.any){
+      if(s.egg.unk && s.egg.v<=30) qs.push(`${p.name}: what % of the product is egg?`);
+      else if(s.egg.v<=5){ up(2); R.push("DE5"); why.push(`Egg ${fmt(s.egg.v)} – 5% or less.`); }
+      else if(s.egg.v<=30){ up(2); R.push("EGG30"); why.push(`Egg ${fmt(s.egg.v)} – up to 30%.`); const ck=eggCheck(cookFor(p,["egg"])); checks.push(ck); if(ck.st==="bad") up(3); }
+      else { up(3); if(permit==="No") permit="Unclear"; R.push("EGG100"); why.push(`Egg ${fmt(s.egg.v)} – more than 30%: needs a veterinary certificate agreed with MPI.`); const ek=eggCheck(cookFor(p,["egg"])); if(ek.st==="ok") checks.push({st:"ok",txt:ek.txt.replace("meets the egg standard","would meet the heat rule for a ≤30% egg version")+" Reformulating to 30% egg or less would make this category 2."}); else checks.push(ek); }
+    }
+  }
+  if(s.fish.any){ if(!s.fish.unk && s.fish.v<20){ up(2); R.push("FISH"); why.push(`Fish/seafood ${fmt(s.fish.v)} – under 20%.`); } else { up(3); if(permit==="No") permit="Unclear"; R.push("FISH"); why.push("Fish/seafood 20% or more (or unknown)."); } }
+  if(s.honey.any){ up(3); if(permit==="No") permit="Unclear"; R.push("HONEY"); why.push("Contains honey."); }
+  if(s.gelatine.any){ R.push("GELATINE"); }
+  if((p.whole_seeds||[]).length) R.push("SEEDS");
+  if((p.eu_only_allergens||[]).length) R.push("PEALEU");
+  if(!animalAny) why.push("No animal ingredients – no animal-product import standard applies.");
+  if(qs.length && cat<2){ cat=2; }
+  return {cat,permit,why,R:[...new Set(R)],checks,qs,s};
+}
+
+/* ======================= rulebook ======================= */
+const G={acc:"Market access",bio:"Biosecurity – animal ingredients",fs:"Food safety",lab:"Labelling",con:"Consumer law",trade:"Trade & tax"};
+const RULES=[
+ {id:"IMP",g:"acc",all:1,t:"Registered NZ food importer",law:"Food Act 2014",x:"Only a food importer registered with MPI may import food for sale, and only an NZ resident person or company can register. Without one, goods are held at the border. Options: partner with a registered NZ distributor, or set up an NZ company.",src:["reg"]},
+ {id:"ADR",g:"acc",all:1,t:"Importer duties",law:"Food Act 2014 · Food Notice 2026",x:"The importer must confirm the food is safe and suitable, keep records and traceability, and run recalls. Lyofood supplies specs, certificates, batch data and its recall plan.",src:["notice"]},
+ {id:"IHS",g:"bio",t:"Import Health Standard applies",law:"Biosecurity Act 1993 · SPECPROD.ALL",x:"Every product with animal ingredients must fit an IHS clause. General conditions: commercially manufactured and packaged, unopened, no refrigeration needed before opening (shelf-stable), documents in English.",src:["ihs"]},
+ {id:"MEAT5",g:"bio",t:"5% or less meat",law:"SPECPROD.ALL cl. 2.6.1",x:"Processed foods with 5% or less meat (incl. fat, blood, offal) may come from any country with no permit. Needed: a manufacturer's declaration stating '5% or less meat' – on Lyofood letterhead, signed by the quality manager, dated within 12 months.",src:["ihs"]},
+ {id:"STOCK",g:"bio",t:"Meat only as stock, extract or fat",law:"SPECPROD.ALL cl. 2.6.2",x:"Meat-based ingredients without visible meat pieces may come from any country in retail packaging, no permit. Bulk for repacking in NZ would need a permit and a transitional facility.",src:["ihs"]},
+ {id:"PORK",g:"bio",t:"Cooked pork from the EU",law:"IHS MEAPORIC.EU",x:"Cooked pork products from any EU country are accepted if the pork reached a minimum core temperature and time (e.g. 60 °C/40 min, 65 °C/20 min, 70 °C/11 min). Needed for every shipment: official EU veterinary certificate from the Polish veterinary inspection, label stating the member state of origin. No permit for finished retail pouches.",src:["pork"]},
+ {id:"ASF",g:"bio",t:"Open question: African swine fever in Poland",law:"MEAPORIC.EU (2011)",x:"The EU pork standard dates from 2011 and does not mention African swine fever, which has been in Poland since 2014. MPI must confirm the cooked-pork route is open for Polish pork.",src:["pork"]},
+ {id:"RUM",g:"bio",t:"Beef and lamb (ruminant meat)",law:"IHS RUMNPROD.GEN (2022)",x:"Ruminant meat products only from countries MPI approves, with a veterinary certificate MPI has agreed. The EU is not named and no certificate for Poland was found. Without one: equivalence request and import permit.",src:["rum"]},
+ {id:"POULTRY",g:"bio",t:"Chicken and other poultry",law:"MPI poultry standards",x:"No import route for EU chicken meat products was found. Even the US/Canada heat-and-eat standard excludes poultry (bird flu, Newcastle disease).",src:["poultry","hem"]},
+ {id:"EQUIV",g:"bio",t:"Equivalence request + import permit",law:"Biosecurity Act s27(1)(d) · s24D",x:"If no clause fits, MPI's Chief Technical Officer can accept an equivalent process; it is recorded on an import permit (online, about 20 working days, fee). MPI prefers the request to come from the exporting country's authority. Best argument: cooking that meets the US heat-and-eat benchmark (meat 70 °C/25 min or 80 °C/3 min).",src:["ihs","hem"]},
+ {id:"REFORM",g:"bio",t:"Workaround: pork-only version",law:"Product idea",x:"A version without the beef/poultry (only pork) would move to the cooked-pork route (category 3). Other workarounds: plant-based 'chicken-style' pieces, a ≤5% meat version, or production in NZ/Australia under licence.",src:[]},
+ {id:"DESSERT",g:"bio",t:"Cakes, puddings, biscuits with dairy or egg",law:"SPECPROD.ALL cl. 2.3.1",x:"Biscuits, bread, cakes, confectionery, crackers and puddings with dairy or egg may come from any country in any amount, if shelf-stable, commercially packaged and unopened. No certificate. Ask MPI to confirm the product counts as one of these.",src:["ihs"]},
+ {id:"DE5",g:"bio",t:"5% or less dairy or egg",law:"SPECPROD.ALL cl. 2.3.5",x:"Products with 5% or less each of dairy or egg may come from any country. Needed: a manufacturer's declaration or a label statement giving the content.",src:["ihs"]},
+ {id:"DAIRY",g:"bio",t:"Dairy as the only animal ingredient",law:"EDIPROIC.ALL cl. 2.1(1)",x:"\"Commercial consignments of shelf-stable dairy products, dairy samples and products containing dairy ingredients may be imported from any country.\" No certificate or heat figure listed. This conflicts with SPECPROD.ALL cl. 2.3.6 (official F0 ≥ 3 certificate above 5% dairy) – MPI must confirm which applies.",src:["dairy","ihs"]},
+ {id:"BAR",g:"bio",t:"Protein/energy bars with dairy or egg",law:"SPECPROD.ALL cl. 2.3.3",x:"Dietary protein supplements and protein bars with dairy or egg may come from any country in retail packaging, shelf-stable. Ask MPI to confirm an energy bar counts.",src:["ihs"]},
+ {id:"MIXED",g:"bio",t:"More than 5% dairy/egg mixed with other animal products",law:"SPECPROD.ALL cl. 2.3.6",x:"Needs an official certificate of F0 ≥ 3 heat treatment (canning level) – not possible for freeze-dried food. The alternative is each animal ingredient meeting its own standard; MPI must decide.",src:["ihs"]},
+ {id:"EGG30",g:"bio",t:"Egg up to 30%",law:"IHS Egg Products cl. 2.2",x:"Retail-ready products with up to 30% chicken egg may come from any country with a manufacturer's declaration that the egg was heated to at least 60 °C for 3.5 min, 64 °C for 2.7 min or 70 °C for 2 min.",src:["egg"]},
+ {id:"EGG100",g:"bio",t:"Egg more than 30%",law:"IHS Egg Products cl. 2.3",x:"Only from countries MPI has approved, with a veterinary certificate agreed with MPI. Check whether one exists for Poland/the EU. Alternative: reformulate to 30% egg or less.",src:["egg"]},
+ {id:"FISH",g:"bio",t:"Fish and seafood",law:"SPECPROD.ALL cl. 2.3.5 + CTO 2024",x:"Products with less than 20% aquatic animal products are allowed with a label statement or manufacturer's declaration. 20% or more needs an official F0 ≥ 3 certificate.",src:["ihs"]},
+ {id:"HONEY",g:"bio",t:"Honey and bee products",law:"IHS Specified Processed Bee Products",x:"Bee products have their own strict import standard. Best to keep honey out of NZ recipes.",src:["ihs"]},
+ {id:"GELATINE",g:"bio",t:"Gelatine",law:"SPECPROD.ALL cl. 3.4",x:"Commercially manufactured gelatine and products containing gelatine may be imported from any country.",src:["ihs"]},
+ {id:"SEEDS",g:"bio",t:"Whole seeds",law:"Plant biosecurity",x:"Whole seeds that could grow (e.g. chia, whole coriander or mustard seeds) may be questioned. Be ready to confirm they are cooked/processed and cannot germinate.",src:["proc"]},
+ {id:"HRI",g:"fs",t:"Beef: food safety clearance",law:"Food Notice 2026 – High Regulatory Interest food",x:"Food with more than 5% beef needs a food safety clearance at the border; the origin country's BSE status is checked; sampling and testing at the importer's cost are possible.",src:["beef"]},
+ {id:"NONBEEF",g:"fs",t:"Non-beef declaration",law:"MPI customs practice",x:"The product name may suggest beef although it contains none (or under 5%). Add a non-beef declaration to the customs entry to avoid an unnecessary beef food safety check.",src:["proc"]},
+ {id:"CHEESE",g:"fs",t:"Cheese food safety check",law:"Food Notice 2026",x:"Some cheeses are regulatory-interest foods (mainly soft and raw-milk cheese). Hard, pasteurised cheese is lower risk – confirm with the MPI Imported Food team (imported.food@mpi.govt.nz).",src:["proc"]},
+ {id:"LBL",g:"lab",all:1,t:"NZ/Australian supplier on the label",law:"FSANZ Std 1.2.2",x:"Every pack must show the name and street address of a supplier in New Zealand or Australia (no PO box). A Polish address alone is not compliant.",src:["s122"]},
+ {id:"PEAL",g:"lab",all:1,t:"Allergens – Plain English Allergen Labelling",law:"FSANZ Std 1.2.3 · Schedule 9",x:"Allergens in bold in the ingredient list plus a bold summary starting with 'Contains:'. Mandatory NZ allergens: gluten cereals (wheat, barley, rye, oats), milk, egg, fish, crustacea, molluscs, peanut, soy, sesame, tree nuts (named), lupin, sulphites.",src:["peal"]},
+ {id:"PEALEU",g:"lab",t:"EU-only allergens",law:"FSANZ Schedule 9",x:"Celery and mustard are mandatory allergens in the EU but not on NZ's mandatory list. They may stay in the ingredient list but do not need bold or the 'Contains:' statement – the EU allergen declaration cannot be copied one-to-one.",src:["peal"]},
+ {id:"PCT",g:"lab",all:1,t:"Ingredient list with %",law:"FSANZ Std 1.2.4 · 1.2.10",x:"Ingredients in descending order; the characterising ingredients (e.g. 'pork 40%') with their percentage.",src:["s122"]},
+ {id:"NIP",g:"lab",all:1,t:"Nutrition information panel",law:"FSANZ Std 1.2.8",x:"Energy, protein, fat, saturated fat, carbohydrate, sugars and sodium per serving AND per 100 g, in the NZ format.",src:["s122"]},
+ {id:"DATE",g:"lab",all:1,t:"Date marking",law:"FSANZ Std 1.2.5",x:"Not legally required if the best-before date is 2 years or more away (Lyofood: ~5 years). Recommended anyway. Lot number, net weight, storage and preparation instructions in English are required.",src:["s125"]},
+ {id:"ORIGIN",g:"lab",t:"'Product of Poland' on pork products",law:"MEAPORIC.EU",x:"For the cooked-pork route the pack must name the EU member state of origin. Otherwise country-of-origin labelling is only mandatory in NZ for fresh single-ingredient foods.",src:["pork","cool"]},
+ {id:"CLAIM",g:"lab",all:1,t:"Claims must be true",law:"FSANZ Std 1.2.7 · Fair Trading Act 1986",x:"'High protein', '100% natural', 'no preservatives', 'organic' must be correct and meet the Code's conditions.",src:["s122"]},
+ {id:"CONS",g:"con",all:1,t:"Consumer law",law:"Fair Trading Act 1986 · Consumer Guarantees Act 1993",x:"No misleading statements in marketing; products must be of acceptable quality and fit for purpose. Clarify in the distribution contract who carries recall and liability costs.",src:[]},
+ {id:"FTA",g:"trade",all:1,t:"0% customs duty",law:"NZ–EU Free Trade Agreement (since 1 May 2024)",x:"NZ removed duties on EU goods. Prove EU origin with an origin statement on the invoice (larger shipments may need the exporter's REX number – verify).",src:["fta"]},
+ {id:"GST",g:"trade",all:1,t:"15% GST at the border",law:"Goods and Services Tax Act 1985",x:"GST is charged on imported goods. Include it in pricing.",src:[]},
+ {id:"BROKER",g:"trade",all:1,t:"Customs broker & Trade Single Window",law:"NZ Customs",x:"A customs broker lodges the entry in Trade Single Window and agrees the HS tariff code. MPI recommends using one.",src:["proc"]},
+];
+
+/* ======================= render ======================= */
+let filter="all";
+function renderRulebook(flash){
+  const res=state.products.map(p=>({p,a:assess(p)}));
+  const hit={}; res.forEach(({p,a})=>a.R.forEach(id=>(hit[id]=hit[id]||[]).push(p)));
+  const count={1:0,2:0,3:0,4:0}; res.forEach(r=>count[r.a.cat]++);
+  $("#tiles").innerHTML=res.length?[1,2,3,4].map(c=>`<div class="tile ${CAT[c].k}"><b>${count[c]}</b><span>${CAT[c].n}</span></div>`).join(""):"";
+  $("#tiles").style.display=res.length?"":"none";
+  const nOn=RULES.filter(r=>hit[r.id]).length;
+  $("#rbHint").textContent=res.length?`${nOn} of ${RULES.length} rules apply to your ${res.length} recipe${res.length>1?"s":""}. Highlighted rules are the ones to keep in mind.`:"Every requirement for selling Lyofood products in New Zealand. Paste recipes in the chat – the rules they trigger light up here.";
+  const html=Object.entries(G).map(([g,gname])=>{
+    let rules=RULES.filter(r=>r.g===g);
+    if(filter==="rel") rules=rules.filter(r=>hit[r.id]);
+    if(!rules.length) return "";
+    rules.sort((a,b)=>(hit[b.id]?1:0)-(hit[a.id]?1:0));
+    const on=rules.filter(r=>hit[r.id]).length;
+    return `<div class="grp"><h3>${gname} ${res.length?`<span>${on}/${rules.length} apply</span>`:""}</h3>${rules.map(r=>{
+      const who=hit[r.id]; const cls=who?(r.all?"rule all on":"rule on"):(res.length?"rule off":"rule");
+      const wtxt=who?(r.all?`Applies to all ${who.length} product${who.length>1?"s":""}`:`Applies to: ${who.map(p=>esc(p.name)).join(", ")}`):(res.length?"Not triggered by your recipes":(r.all?"Applies to every product":"Applies only to some recipes"));
+      return `<article class="${cls}" id="rule-${r.id}">
+        <div class="rule-h"><span class="id">${r.id}</span><span class="name">${esc(r.t)}</span><span class="law">${esc(r.law)}</span></div>
+        <p>${esc(r.x)}</p>
+        <div class="applies"><span class="${who?"who":"na"}">${wtxt}</span>${r.src.length?`<span class="hint">Source: ${r.src.map(link).join(" · ")}</span>`:""}</div>
+      </article>`}).join("")}</div>`;
+  }).join("");
+  $("#rb").innerHTML=html||`<p class="empty">No rules match this filter yet.</p>`;
+  if(flash){ const el=document.getElementById("rule-"+flash); if(el){ el.scrollIntoView({block:"center",behavior:"smooth"}); el.classList.add("flash"); setTimeout(()=>el.classList.remove("flash"),1600);} }
+}
+
+function productHTML(p){
+  const a=assess(p); const k=CAT[a.cat].k;
+  const pc=a.permit==="Yes"?"yes":a.permit==="Unclear"?"unclear":"";
+  const s=a.s; const comp=[["Pork",s.pork],["Beef/lamb",s.rum],["Poultry",s.poultry],["Dairy",s.dairy],["Egg",s.egg],["Fish",s.fish]]
+    .filter(([,x])=>x.any).map(([l,x])=>`${l} ${x.unk?(x.v>0?fmt(x.v)+"+":"?"):fmt(x.v)}`).join(" · ")||"No animal ingredients";
+  const own=a.R.filter(id=>!RULES.find(r=>r.id===id)?.all);
+  return `<div class="prod">
+    <div class="prod-h"><h3>${esc(p.name||"Unnamed recipe")}</h3><span class="pill ${k}">${a.cat} · ${CAT[a.cat].n}</span><span class="pill permit ${pc}">Permit: ${a.permit}</span></div>
+    <div class="comp">${esc(comp)}</div>
+    <ul>${a.why.map(w=>`<li>${esc(w)}</li>`).join("")}</ul>
+    ${a.checks.length?`<div><div class="lbl">Cooking check</div><ul>${a.checks.map(c=>`<li><span class="${c.st==="ok"?"ok":c.st==="bad"?"bad":"miss"}">${c.st==="ok"?"✓":c.st==="bad"?"✗":"?"}</span> ${esc(c.txt)}</li>`).join("")}</ul></div>`:""}
+    <div><div class="lbl">Rules to keep in mind</div><div class="chips">${own.map(id=>`<button class="chip" data-rule="${id}" title="${esc(RULES.find(r=>r.id===id)?.t||"")}">${id}</button>`).join("")}<button class="chip" data-rule="IMP" title="Rules for every product">+ ${a.R.length-own.length} general</button></div></div>
+  </div>`;
+}
+function botReplyHTML(note){
+  const ps=state.products;
+  if(!ps.length) return `<p>I couldn't find a recipe in that. Write one product per line, e.g. <i>Pork Stew: pork 40%, barley 26% – pork cooked at 95 °C for 45 min</i>.</p>`;
+  const qs=[...ps.flatMap(p=>assess(p).qs),...(state.unclear||[])];
+  return `<p>${ps.length} recipe${ps.length>1?"s":""} checked. The rulebook on the right now highlights every rule that applies.</p>
+    ${ps.map(productHTML).join("")}
+    ${qs.length?`<div class="questions"><div class="lbl">To complete the check, tell me</div><ul>${[...new Set(qs)].map(q=>`<li>${esc(q)}</li>`).join("")}</ul></div>`:""}
+    ${note?`<p class="hint">${esc(note)}</p>`:""}`;
+}
+const WELCOME=`<p><b>Paste your recipe list.</b> For each product give the ingredients with percentages and how hot and how long the meat, egg or dairy is cooked – in any format, like a message.</p>
+<p>I'll sort every recipe into an import category and light up every NZ rule, law and requirement it triggers in the rulebook. You can add or correct details in later messages.</p>`;
+function renderThread(){
+  const t=$("#thread");
+  t.innerHTML=`<div class="msg bot"><span class="who">Recipe check</span><div class="bubble">${WELCOME}</div></div>`+
+    state.thread.map(m=>m.role==="user"
+      ?`<div class="msg user"><span class="who">You</span><div class="bubble">${esc(m.text)}</div></div>`
+      :`<div class="msg bot"><span class="who">Recipe check</span><div class="bubble">${m.html}</div></div>`).join("");
+  t.scrollTop=t.scrollHeight;
+}
+
+/* ======================= reading the recipes ======================= */
+function parseLocal(text){
+  const prods=[]; const lines=text.split(/\n+/).map(l=>l.trim()).filter(Boolean);
+  const animalOf=n=>{ n=n.toLowerCase();
+    if(/coconut|oat milk|soy milk|almond milk|plant/.test(n)) return "none";
+    if(/pork|bacon|ham|sausage|pig/.test(n)) return "pork"; if(/beef|veal/.test(n)) return "beef"; if(/lamb|mutton/.test(n)) return "lamb";
+    if(/venison|deer/.test(n)) return "venison"; if(/chicken|poultry/.test(n)) return "chicken"; if(/turkey/.test(n)) return "turkey"; if(/duck/.test(n)) return "duck";
+    if(/milk|cream|butter|chees|cheddar|yog|whey|pecorino|gruy|gorgonzola|parmesan|ghee|lassi/.test(n)) return "dairy";
+    if(/egg|mayonnaise/.test(n)) return "egg"; if(/fish|salmon|tuna|cod/.test(n)) return "fish"; if(/shrimp|prawn|mussel|seafood/.test(n)) return "seafood";
+    if(/honey/.test(n)) return "honey"; if(/gelatin/.test(n)) return "gelatine"; return "none"; };
+  const cookRe=/(?:([a-zäöü ]+?)\s+(?:is\s+|are\s+)?(?:cooked|simmered|heated|boiled|reach(?:es)?)[^0-9]*?)?(\d{2,3}(?:[.,]\d)?)\s*°?\s*c\b(?:[^0-9]{0,15}(\d+(?:[.,]\d+)?)\s*(h|hours?|min|minutes?|s|sec))?/gi;
+  let current=null;
+  lines.forEach(l=>{
+    const m=l.match(/^([^:]{2,60}):\s*(.*)$/);
+    if(m && /\d+\s*%|,/.test(m[2])){
+      current={name:m[1].replace(/\((.*?)\)/,"").trim(),type:/breakfast/i.test(m[1])?"breakfast":/crumble|pudding|cake|custard|crema|dessert|biscuit/i.test(m[1])?"dessert":/bar\b/i.test(m[1])?"bar":/heater|spoon|wipe/i.test(m[1])?"accessory":"meal",ingredients:[],cooking:[],whole_seeds:[],eu_only_allergens:[]};
+      prods.push(current);
+      m[2].split(/,|;/).forEach(part=>{ const pm=part.match(/^\s*(.*?)\s*(\d+(?:[.,]\d+)?)\s*%/); const name=(pm?pm[1]:part).trim(); if(!name||/°c/i.test(part)) return;
+        const an=animalOf(name); current.ingredients.push({name,percent:pm?+pm[2].replace(",","."):null,animal:an,form:/stock|broth|extract|lard|dripping/i.test(name)?"stock_extract_fat":"pieces"});
+        if(/celery/i.test(name)) current.eu_only_allergens.push("celery"); if(/mustard/i.test(name)) current.eu_only_allergens.push("mustard");
+        if(/chia|coriander seed|mustard seed|caraway/i.test(name)) current.whole_seeds.push(name); });
+    }
+    let c; cookRe.lastIndex=0;
+    while((c=cookRe.exec(l))){ const target=(c[1]||"whole").trim().toLowerCase().replace(/^the\s+/,""); let mins=c[3]?+c[3].replace(",","."):null; if(mins!==null&&/^h/i.test(c[4])) mins*=60; if(mins!==null&&/^s/i.test(c[4])) mins/=60;
+      const tgt=/pork/.test(target)?"pork":/chicken/.test(target)?"chicken":/beef/.test(target)?"beef":/lamb/.test(target)?"lamb":/egg/.test(target)?"egg":/milk|dairy/.test(target)?"milk":target||"whole";
+      const entry={target:tgt,temp_c:+c[2].replace(",","."),minutes:mins};
+      const owner=prods.filter(p=>p.ingredients.some(i=>i.animal===tgt||(tgt==="egg"&&i.animal==="egg")||(tgt==="chicken"&&POULTRY.includes(i.animal))));
+      (owner.length?owner:(current?[current]:[])).forEach(p=>p.cooking.push(entry)); }
+  });
+  return {products:prods,unclear:[]};
+}
+
+let accessCode=""; try{ accessCode=localStorage.getItem(STORE+"-code")||""; }catch(e){}
+$("#mode").textContent="Enter sends · Shift+Enter for a new line · Recipes are read by Claude";
+async function readWithClaude(prevTexts,text){
+  const r=await fetch("/api/read",{method:"POST",headers:{"content-type":"application/json","x-access-code":accessCode},body:JSON.stringify({previous:prevTexts,newest:text})});
+  if(r.status===401){ const err=new Error("code"); err.code="access"; throw err; }
+  if(!r.ok){ const err=new Error("http"); err.code="server"; throw err; }
+  return await r.json();
+}
+
+let busy=false, ctl=null;
+async function send(){
+  const box=$("#box"); const text=box.value.trim(); if(!text||busy) return;
+  busy=true; $("#send").disabled=true; box.value=""; grow();
+  const prevTexts=state.userTexts.slice();
+  state.thread.push({role:"user",text});
+  state.thread.push({role:"bot",html:`<p class="thinking">Reading your recipes and checking them against the NZ rules…</p>`});
+  renderThread();
+  let note="";
+  try{
+    let data=null;
+    try{ data=await readWithClaude(prevTexts,text); }
+    catch(e){
+      if(e.code==="access"){
+        const c=prompt("This checker is protected. Please enter the access code:");
+        if(c){ accessCode=c.trim(); try{ localStorage.setItem(STORE+"-code",accessCode); }catch(_){} try{ data=await readWithClaude(prevTexts,text); }catch(_){ note="Wrong access code – I used the simple offline reader instead."; } }
+        else note="No access code – I used the simple offline reader instead.";
+      } else note="Claude couldn't be reached – I used the simple offline reader instead.";
+    }
+    let isNew;
+    if(!data||!Array.isArray(data.products)){
+      isNew=parseLocal(text).products.length>0;
+      data=parseLocal(isNew?text:[...prevTexts,text].join("\n"));
+    } else isNew=data.new_list!==false || !prevTexts.length;
+    if(isNew){
+      state.userTexts=[text];
+      state.thread=[{role:"user",text},state.thread[state.thread.length-1]];
+    } else state.userTexts=[...prevTexts,text];
+    state.products=(data.products||[]).filter(p=>p&&p.name);
+    state.unclear=Array.isArray(data.unclear)?data.unclear.map(String).slice(0,12):[];
+    state.thread[state.thread.length-1]={role:"bot",html:botReplyHTML(note)};
+  }catch(e){
+    state.thread[state.thread.length-1]={role:"bot",html:`<p>Something went wrong while checking. Please send the message again.</p>`};
+  }
+  save(); renderThread(); renderRulebook(); busy=false; $("#send").disabled=false; box.focus();
+}
+
+/* ======================= events ======================= */
+function grow(){ const b=$("#box"); b.style.height="auto"; b.style.height=Math.min(260,b.scrollHeight)+"px"; }
+$("#box").addEventListener("input",grow);
+$("#box").addEventListener("keydown",e=>{ if(e.key==="Enter"&&!e.shiftKey){ e.preventDefault(); send(); } });
+$("#send").addEventListener("click",send);
+document.querySelectorAll("[data-ex]").forEach(b=>b.addEventListener("click",()=>{ $("#box").value=EXAMPLES[b.dataset.ex]; grow(); $("#box").focus(); }));
+$("#thread").addEventListener("click",e=>{ const c=e.target.closest("[data-rule]"); if(!c) return; if(filter==="rel"&&!document.getElementById("rule-"+c.dataset.rule)){} renderRulebook(c.dataset.rule); });
+document.querySelectorAll(".seg button").forEach(b=>b.addEventListener("click",()=>{ filter=b.dataset.f; document.querySelectorAll(".seg button").forEach(x=>x.setAttribute("aria-pressed",x===b)); renderRulebook(); }));
+let armed=false;
+$("#reset").addEventListener("click",e=>{ const b=e.currentTarget; if(!armed){ armed=true; b.textContent="Click again to clear"; setTimeout(()=>{armed=false;b.textContent="New check"},3000); return; }
+  armed=false; b.textContent="New check"; ctl?.abort(); state={userTexts:[],thread:[],products:[],unclear:[]}; save(); renderThread(); renderRulebook(); });
+
+renderThread(); renderRulebook();
+</script>
+
+</body>
+</html>
